@@ -1,0 +1,527 @@
+#!/bin/bash
+
+# Added the different SIGs to script
+
+ 
+
+BASEDIR=/usr/local/sec-2.8.3
+
+ 
+
+SECADMCFG=$BASEDIR/secadm.conf
+
+SEC=$BASEDIR/sec
+
+ 
+
+start() {
+
+   case "$RSNAME" in
+
+   all)
+
+        while read command
+
+        do
+
+            RULESET=`echo $command | awk '{print $1}'`
+
+            RULEFILE=`echo $command | awk '{print $2}'`
+
+            SECINPUT=`echo $command | awk '{print $3}'`
+
+            DEBUGLEVEL=`echo $command | awk '{print $4}'`
+
+            PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+            if [ ! -z "$command" ]
+
+            then
+
+             #check if particular SEC ruleset is running
+
+             if [ ! -f $PID_RULESET ]
+
+             then
+
+              perl $SEC --user=daemon --group=daemon --conf=$RULEFILE --input=$SECINPUT  --debug=$DEBUGLEVEL --pid=$PID_RULESET --detach --log=/var/log/seclog
+
+              RETVAL=$?
+
+              if [ $RETVAL -eq 0 ]
+
+              then
+
+                echo "[Info] ****** Ruleset - $RULESET start running"
+
+              fi
+
+              else
+
+               echo "[Warning] ***** Ruleset - $RULESET is running already"
+
+              fi
+
+             fi
+
+        done < $SECADMCFG
+
+    ;;
+
+   *)
+
+    RULESET=$RSNAME
+
+    RULEFILE=`cat $SECADMCFG | grep $RULESET | awk '{print $2}'`
+
+    SECINPUT=`cat $SECADMCFG | grep $RULESET | awk '{print $3}'`
+
+                                DEBUGLEVEL=`cat $SECADMCFG | grep $RULESET | awk '{print $4}'`
+
+    PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+    if [  "$RULEFILE" = "" ]
+
+    then
+
+      echo "[Error] *** Can't find Ruleset - $RULESET in $SECADMCFG"
+
+      echo "below rulesets are configured"
+
+      echo "------------------------------------------------------------------------"
+
+      cat $SECADMCFG | awk '{printf "%16s %32s %32s\n", "Ruleset="$1,"Conf_File="$2,"logfile="$3}'
+
+      echo "------------------------------------------------------------------------"
+
+    else
+
+      #check if particular SEC ruleset is running
+
+      if [ ! -f $PID_RULESET ]
+
+      then
+
+       perl $SEC --user=daemon --group=daemon --conf=$RULEFILE --input=$SECINPUT --pid=$PID_RULESET --debug=$DEBUGLEVEL --detach --log=/var/log/seclog
+
+       RETVAL=$?
+
+       if [ $RETVAL -eq 0 ]
+
+       then
+
+        echo "[Info] ****** Ruleset - $RULESET start running"
+
+       fi
+
+      else
+
+       echo "[Warning] ***** Ruleset - $RULESET is running already"
+
+      fi
+
+        fi
+
+  esac
+
+}
+
+ 
+
+stop() {
+
+     case "$RSNAME" in
+
+   all)
+
+     while read command
+
+    do
+
+                RULESET=`echo $command | awk '{print $1}'`
+
+    PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+    if [ ! -z "$command" ]
+
+    then
+
+     /bin/kill -15 `/bin/cat $PID_RULESET`
+
+     RETVAL=$?
+
+     if [ $RETVAL -eq 0 ]
+
+     then
+
+       echo "[Info] ******  Ruleset - $RULESET stopped"
+
+       rm $PID_RULESET
+
+     else
+
+       echo "[Error] ***  Failed to stop $RULESET  (it may be NOT running)"
+
+     fi
+
+    fi
+
+    done < $SECADMCFG
+
+    ;;
+
+   *)
+
+    RULESET=$RSNAME
+
+    PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+     /bin/kill -9 `/bin/cat $PID_RULESET`   
+
+      RETVAL=$?
+
+     if [ $RETVAL -eq 0 ]
+
+     then
+
+       echo "[Info] ******  Ruleset - $RULESET stopped"
+
+       rm $PID_RULESET
+
+     else
+
+       echo "[Error] ***  Failed to stop $RULESET (it may be NOT running)"
+
+     fi
+
+   esac
+
+}
+
+ 
+
+stats() {
+
+        case "$RSNAME" in
+
+                        all)
+
+                                 while read command
+
+                                do
+
+                RULESET=`echo $command | awk '{print $1}'`
+
+                                PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+                                if [ ! -z "$command" ]
+
+                                then
+
+                                        /bin/kill -s SIGUSR1 `/bin/cat $PID_RULESET`
+
+                                        RETVAL=$?
+
+                                        if [ $RETVAL -eq 0 ]
+
+                                        then
+
+                                                        echo "[Info] ******  Ruleset - $RULESET stats dump"
+
+                                                        echo "____________________________________________"
+
+                                                        sleep 5
+
+                                                        cat /tmp/sec.dump | more
+
+                                                        rm /tmp/sec.dump
+
+                                        else
+
+                                                        echo "[Error] ***  Failed to dump $RULESET stats  (it may be NOT running)"
+
+                                        fi
+
+                                fi
+
+                                done < $SECADMCFG
+
+                                ;;
+
+                        *)
+
+                                RULESET=$RSNAME
+
+                                PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+                                        /bin/kill -s SIGUSR1 `/bin/cat $PID_RULESET`
+
+                                         RETVAL=$?
+
+                                        if [ $RETVAL -eq 0 ]
+
+                                        then
+
+                                                        echo "[Info] ******  Ruleset - $RULESET stats dump"
+
+       echo "____________________________________________"
+
+       sleep 5
+
+       cat /tmp/sec.dump | more
+
+                                                        rm /tmp/sec.dump
+
+                                        else
+
+                                                        echo "[Error] ***  Failed to dump $RULESET stats (it may be NOT running)"
+
+                                        fi
+
+                        esac
+
+}
+
+ 
+
+reload() {
+
+        case "$RSNAME" in
+
+                        all)
+
+                                 while read command
+
+                                do
+
+                RULESET=`echo $command | awk '{print $1}'`
+
+                                PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+                                if [ ! -z "$command" ]
+
+                                then
+
+                                        /bin/kill -s SIGABRT `/bin/cat $PID_RULESET`
+
+                                        RETVAL=$?
+
+                                        if [ $RETVAL -eq 0 ]
+
+                                        then
+
+                                                        echo "[Info] ******  Ruleset - $RULESET reloaded"
+
+                                        else
+
+                                                        echo "[Error] ***  Failed to reload $RULESET stats  (it may be NOT running)"
+
+                                        fi
+
+                                fi
+
+                                done < $SECADMCFG
+
+                                ;;
+
+                        *)
+
+                                RULESET=$RSNAME
+
+                                PID_RULESET=$BASEDIR/sec-2.8.3-Running_$RULESET.pid
+
+                                        /bin/kill -s SIGABRT `/bin/cat $PID_RULESET`
+
+                                         RETVAL=$?
+
+                                        if [ $RETVAL -eq 0 ]
+
+                                        then
+
+                                                        echo "[Info] ******  Ruleset - $RULESET reloaded"
+
+                                        else
+
+                                                        echo "[Error] ***  Failed to reload $RULESET (it may be NOT running)"
+
+                                        fi
+
+                        esac
+
+}
+
+ 
+
+# Main
+
+if [  $#  -lt 2 ]
+
+then
+
+    echo "Usage: secadm [start|stop|restart|stats] [all|ruleset_name]"
+
+exit
+
+fi
+
+ 
+
+RSNAME=$2
+
+ 
+
+ 
+
+case "$1" in
+
+  start)
+
+        start
+
+        ;;
+
+  stop)
+
+        stop
+
+        ;;
+
+  stats)
+
+        stats
+
+        ;;
+
+  reload)
+
+        reload
+
+        ;;
+
+  restart)
+
+        stop
+
+        start
+
+        ;;
+
+  *)
+
+        echo "Usage: secadm [start|stop|restart|stats|reload] [all|ruleset_name]"
+
+        exit 1
+
+esac
+
+exit $RETVAL
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+#!/bin/sh
+
+ 
+
+################
+
+# VARIABLES
+
+################
+
+EMAIL_LIST= name@com.com
+
+SENDER=secalert@com.com
+
+TMP_DIR=/tmp
+
+TMP_FILE=${TMP_DIR}/tmp_mail.$$
+
+#
+
+# The first argument $1 is the alarm level of the Alert:
+
+Severity_Level=$1
+
+case ${Severity_Level} in
+
+        0) ALARM_LVL="0 - Emergency";;
+
+        1) ALARM_LVL="1 - Alert";;
+
+        2) ALARM_LVL="2 - Critical";;
+
+        3) ALARM_LVL="3 - Error";;
+
+        4) ALARM_LVL="4 - Warning";;
+
+    5) ALARM_LVL="5 - Notice";;
+
+    6) ALARM_LVL="6 - Informational";;
+
+    7) ALARM_LVL="7 - Debugging";;
+
+esac
+
+#
+
+# The second argument $2 is the class of the Alert:
+
+CLASS_ALARM=$2
+
+#
+
+# The thrid argument $3 is the title of the Alert:
+
+TITLE_ALARM=$3
+
+#
+
+# Keep the relevent information from the message in $* :
+
+echo $* > ${TMP_FILE}
+
+MESSAGE_ALARM="`cut -d' ' -f3- ${TMP_FILE}`"
+
+ 
+
+################
+
+# MAIN
+
+################
+
+if [ ! -d ${TMP_DIR} ]
+
+then
+
+        mkdir -p ${TMP_DIR}
+
+fi
+
+(
+
+echo "Event Type : ${CLASS_ALARM}"
+
+echo "Severity Level : ${ALARM_LVL}"
+
+echo ""
+
+echo "Messages :"
+
+echo "${MESSAGE_ALARM}"
+
+echo ""
+
+) | /bin/mailx -s "${TITLE_ALARM}" -r ${SENDER} ${EMAIL_LIST}
+
+/bin/rm -f ${TMP_FILE}
